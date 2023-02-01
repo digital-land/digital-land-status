@@ -2,7 +2,7 @@ name: Deploy
 
 on:
   push:
-    branches: [setup-github-action-ecr]
+    branches: [main]
   workflow_dispatch:
     inputs:
       environment:
