@@ -59,7 +59,7 @@ jobs:
       - run: docker pull $DOCKER_REPO:latest || echo "no current latest image"
 
       # - run: docker build --build-arg now="Tue Feb 07 15:03:15 UTC 2023" -t $DOCKER_REPO:${{ steps.vars.outputs.sha_short }} .
-      - run: docker build --build-arg DEPLOY_TIME="$(date + '%Y-%m-%dT%H:%M:%S')" -t $DOCKER_REPO:${{ steps.vars.outputs.sha_short }} .
+      - run: docker build --build-arg DEPLOY_TIME="$(date + '%Y-%m-%d')" -t $DOCKER_REPO:${{ steps.vars.outputs.sha_short }} .
 
       - run: docker tag $DOCKER_REPO:${{ steps.vars.outputs.sha_short }} $DOCKER_REPO:latest
 
