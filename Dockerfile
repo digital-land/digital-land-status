@@ -6,11 +6,11 @@ RUN npm install
 COPY server.js .
 COPY tests.js .
 ARG DEPLOY_TIME
-ARG now
+# ARG now
 ENV DEPLOY_TIME=$DEPLOY_TIME
-ENV build_date=$now
+# ENV build_date=$now
 # RUN echo "$DEPLOY_TIME" >> DEPLOY_TIME
-RUN echo "$build_date" >> DEPLOY_TIME
-RUN echo "$build_date" >> DEPLOY_TIME1
+RUN echo "$DEPLOY_TIME" >> DEPLOY_TIME
+# RUN echo "$DEPLOY_TIME" >> DEPLOY_TIME1
 
 CMD ["npm", "start"]
