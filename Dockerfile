@@ -1,4 +1,4 @@
-FROM node:16
+FROM node:20-alpine
 RUN npm install -g npm
 COPY package-lock.json .
 COPY package.json .
