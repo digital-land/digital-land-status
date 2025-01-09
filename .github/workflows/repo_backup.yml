@@ -1,0 +1,27 @@
+name: Backup Repository to S3
+
+on:
+#   schedule:
+#     - cron: '0 0 * * *' # Run daily
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v3
+
+    - name: Create Archive
+      run: tar -czf repo_backup.tar.gz .
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.DEPLOY_AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.DEPLOY_AWS_SECRET_ACCESS_KEY }}
+        aws-region: eu-west-2
+
+    - name: Upload to S3
+      run: aws s3 cp repo_backup.tar.gz s3://dl-repo-backup/backups/repo_backup-$(date +%F).tar.gz
