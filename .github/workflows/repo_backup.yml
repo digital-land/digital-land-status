@@ -1,4 +1,4 @@
-name: Backup Repository to S3
+name: Backup repo to S3
 
 on:
 #   schedule:
@@ -9,7 +9,7 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     environment: development
-    
+
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v3
@@ -25,4 +25,4 @@ jobs:
         aws-region: eu-west-2
 
     - name: Upload to S3
-      run: aws s3 cp repo_backup.tar.gz s3://dl-repo-backup/backups/repo_backup-$(date +%F).tar.gz
+      run: aws s3 cp repo_backup.tar.gz s3://dl-repo-backup/${REPO_NAME}-$(date +%F).tar.gz
