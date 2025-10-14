@@ -2,7 +2,7 @@ name: Deploy
 
 on:
   push:
-    branches: [main, feature/tagging]
+    branches: [main]
   workflow_dispatch:
     inputs:
       environment:
