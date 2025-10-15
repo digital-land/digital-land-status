@@ -62,7 +62,9 @@ jobs:
 
       - id: ref_name
         run: |
-          safe_ref=$(echo "${GITHUB_REF_NAME}" | tr '[:upper:]' '[:lower:]' | tr '/' '-' | tr -c 'a-z0-9_.-' '-')
+          safe_ref=$(echo "${GITHUB_REF_NAME}" \
+            | tr '[:upper:]' '[:lower:]' \
+            | sed -E 's#[^a-z0-9_.-]+#-#g; s/^-+//; s/-+$//')
           echo "safe_ref=${safe_ref}" >> "$GITHUB_OUTPUT"
 
       - run: docker tag $DOCKER_REPO:${{ steps.vars.outputs.sha_short }} $DOCKER_REPO:${{ steps.ref_name.outputs.safe_ref }}
