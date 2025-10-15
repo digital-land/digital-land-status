@@ -69,9 +69,9 @@ jobs:
 
       - run: |
           docker tag $DOCKER_REPO:${{ steps.vars.outputs.sha_short }} $DOCKER_REPO:${{ steps.ref_name.outputs.safe_ref }}
-          docker tag $DOCKER_REPO:${{ steps.vars.outputs.sha_short }} $DOCKER_REPO:latest
+          # docker tag $DOCKER_REPO:${{ steps.vars.outputs.sha_short }} $DOCKER_REPO:latest
 
       - run: |
           docker push $DOCKER_REPO:${{ steps.vars.outputs.sha_short }}
           docker push $DOCKER_REPO:${{ steps.ref_name.outputs.safe_ref }}
-          docker push $DOCKER_REPO:latest
+          # docker push $DOCKER_REPO:latest
