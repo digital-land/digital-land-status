@@ -75,6 +75,5 @@ jobs:
           docker tag $DOCKER_REPO:${{ steps.vars.outputs.sha_short }} $DOCKER_REPO:${{ steps.vars.outputs.release_tag }}
 
       - run: |
-          docker push $DOCKER_REPO:${{ steps.vars.outputs.sha_short }}
           docker push $DOCKER_REPO:${{ steps.ref_name.outputs.safe_ref }}
           docker push $DOCKER_REPO:${{ steps.vars.outputs.release_tag }}
