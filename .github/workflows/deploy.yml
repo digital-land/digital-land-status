@@ -42,9 +42,13 @@ jobs:
         run: |
           sha_short=$(git rev-parse --short HEAD)
           timestamp=$(date -u +%Y%m%dT%H%M%SZ)
+          safe_ref=$(echo "${GITHUB_REF_NAME}" \
+            | tr '[:upper:]' '[:lower:]' \
+            | sed -E 's#[^a-z0-9_.-]+#-#g; s/^-+//; s/-+$//')
           echo "sha_short=${sha_short}" >> "$GITHUB_OUTPUT"
           echo "timestamp=${timestamp}" >> "$GITHUB_OUTPUT"
           echo "release_tag=${timestamp}-${sha_short}" >> "$GITHUB_OUTPUT"
+          echo "safe_ref=${safe_ref}" >> "$GITHUB_OUTPUT"
 
       - run: |
           curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
@@ -63,17 +67,10 @@ jobs:
 
       - run: docker build --build-arg DEPLOY_TIME="$(date +%Y-%m-%dT%H:%M:%S)" -t $DOCKER_REPO:${{ steps.vars.outputs.sha_short }} .
 
-      - id: ref_name
-        run: |
-          safe_ref=$(echo "${GITHUB_REF_NAME}" \
-            | tr '[:upper:]' '[:lower:]' \
-            | sed -E 's#[^a-z0-9_.-]+#-#g; s/^-+//; s/-+$//')
-          echo "safe_ref=${safe_ref}" >> "$GITHUB_OUTPUT"
-
       - run: |
-          docker tag $DOCKER_REPO:${{ steps.vars.outputs.sha_short }} $DOCKER_REPO:${{ steps.ref_name.outputs.safe_ref }}
+          docker tag $DOCKER_REPO:${{ steps.vars.outputs.sha_short }} $DOCKER_REPO:${{ steps.vars.outputs.safe_ref }}
           docker tag $DOCKER_REPO:${{ steps.vars.outputs.sha_short }} $DOCKER_REPO:${{ steps.vars.outputs.release_tag }}
 
       - run: |
-          docker push $DOCKER_REPO:${{ steps.ref_name.outputs.safe_ref }}
+          docker push $DOCKER_REPO:${{ steps.vars.outputs.safe_ref }}
           docker push $DOCKER_REPO:${{ steps.vars.outputs.release_tag }}
