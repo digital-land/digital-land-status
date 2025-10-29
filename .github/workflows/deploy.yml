@@ -36,10 +36,8 @@ jobs:
     env:
       DOCKER_REPO: ${{ secrets.DEPLOY_DOCKER_REPOSITORY }}
       ECS_TASK_FAMILY: development-status
-      CODEDEPLOY_APPLICATION: development-status
-      CODEDEPLOY_DEPLOYMENT_GROUP: development-status-deployment
-      CODEDEPLOY_APPSPEC_BUCKET: ${{ secrets.CODEDEPLOY_APPSPEC_BUCKET }}
-      CODEDEPLOY_APPSPEC_KEY: ${{ secrets.CODEDEPLOY_APPSPEC_KEY }}
+      ECS_CLUSTER: ${{ matrix.environment }}-cluster
+      ECS_SERVICE: development-status
     steps:
       - uses: actions/checkout@v4
 
@@ -100,35 +98,14 @@ jobs:
           task_definition_arn=$(jq -r '.taskDefinition.taskDefinitionArn' register-result.json)
           echo "task_definition_arn=$task_definition_arn" >> "$GITHUB_OUTPUT"
 
-#       - name: Create CodeDeploy deployment
-#         run: |
-#           set -euo pipefail
-#           task_definition_arn="${{ steps.register_task_definition.outputs.task_definition_arn }}"
-#           aws s3 cp "s3://$CODEDEPLOY_APPSPEC_BUCKET/$CODEDEPLOY_APPSPEC_KEY" appspec-template.json
-#           sed -i "s#<TASK_DEFINITION>#$task_definition_arn#g" appspec-template.json
-
-#           python3 - <<'PY'
-# import json, os
-# with open("appspec-template.json") as f:
-#     content = f.read()
-# payload = {
-#     "applicationName": os.environ["CODEDEPLOY_APPLICATION"],
-#     "deploymentGroupName": os.environ["CODEDEPLOY_DEPLOYMENT_GROUP"],
-#     "revision": {
-#         "revisionType": "AppSpecContent",
-#         "appSpecContent": {
-#             "content": content
-#         }
-#     }
-# }
-# with open("codedeploy-payload.json", "w") as f:
-#     json.dump(payload, f)
-# PY
-
-#           aws deploy create-deployment --cli-input-json file://codedeploy-payload.json
-
-      # - name: trigger aws CodePipeline
-      #   env:
-      #     CODEPIPELINE_NAME: ${{ secrets.CODEPIPELINE_NAME }}
-      #   if: ${{ env.CODEPIPELINE_NAME != '' }}
-      #   run: aws codepipeline start-pipeline-execution --name "$CODEPIPELINE_NAME"
+      - name: Deploy ECS service
+        env:
+          TASK_DEFINITION_ARN: ${{ steps.register_task_definition.outputs.task_definition_arn }}
+        run: |
+          set -euo pipefail
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE" \
+            --task-definition "$TASK_DEFINITION_ARN" \
+            --force-new-deployment
+          aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE"
