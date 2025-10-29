@@ -111,6 +111,6 @@ jobs:
           # aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE"
           aws deploy create-deployment \
             --application-name development-status \
-            --deployment-group-name development-status \
+            --deployment-group-name development-status-deployment \
             --deployment-config-name CodeDeployDefault.ECSAllAtOnce \
             --revision "revisionType=S3,s3Location={bucket=development-status-deployments,key=_buildAssets/appspec.json,bundleType=JSON}"
