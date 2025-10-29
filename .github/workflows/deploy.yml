@@ -35,6 +35,9 @@ jobs:
     environment: ${{ matrix.environment }}
     env:
       DOCKER_REPO: ${{ secrets.DEPLOY_DOCKER_REPOSITORY }}
+      ECS_CLUSTER: development-cluster
+      ECS_SERVICE: development-status
+      ECS_TASK_FAMILY: development-status
     steps:
       - uses: actions/checkout@v4
 
@@ -55,7 +58,7 @@ jobs:
           unzip -q awscliv2.zip
           sudo ./aws/install --update
           sudo apt-get update
-          sudo apt-get install -y rsync
+          sudo apt-get install -y rsync jq
 
       - uses: aws-actions/configure-aws-credentials@v1-node16
         with:
@@ -74,3 +77,31 @@ jobs:
       - run: |
           docker push $DOCKER_REPO:${{ steps.vars.outputs.safe_ref }}
           docker push $DOCKER_REPO:${{ steps.vars.outputs.release_tag }}
+
+      - name: Register ECS task definition revision
+        id: register_task_definition
+        env:
+          IMAGE_URI: ${{ env.DOCKER_REPO }}:${{ steps.vars.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          aws ecs describe-task-definition --task-definition "$ECS_TASK_FAMILY" --query taskDefinition > taskdef.json
+          jq --arg IMAGE "$IMAGE_URI" '.containerDefinitions |= map(.image = $IMAGE)
+            | del(.revision, .taskDefinitionArn, .requiresAttributes, .compatibilities, .status, .registeredAt, .registeredBy)' taskdef.json > new-taskdef.json
+          aws ecs register-task-definition --cli-input-json file://new-taskdef.json > register-result.json
+          task_definition_arn=$(jq -r '.taskDefinition.taskDefinitionArn' register-result.json)
+          echo "task_definition_arn=$task_definition_arn" >> "$GITHUB_OUTPUT"
+
+      - name: Update ECS service
+        if: ${{ env.ECS_CLUSTER != '' && env.ECS_SERVICE != '' }}
+        run: |
+          set -euo pipefail
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE" \
+            --task-definition "${{ steps.register_task_definition.outputs.task_definition_arn }}"
+
+      # - name: trigger aws CodePipeline
+      #   env:
+      #     CODEPIPELINE_NAME: ${{ secrets.CODEPIPELINE_NAME }}
+      #   if: ${{ env.CODEPIPELINE_NAME != '' }}
+      #   run: aws codepipeline start-pipeline-execution --name "$CODEPIPELINE_NAME"
