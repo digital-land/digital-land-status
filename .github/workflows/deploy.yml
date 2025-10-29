@@ -108,5 +108,9 @@ jobs:
           #   --service "$ECS_SERVICE" \
           #   --task-definition "$TASK_DEFINITION_ARN" \
           #   --force-new-deployment
-          aws ecs update-service --cluster ${{ matrix.environment }}-cluster --service ${{ matrix.environment }}-status  --task-definition ${{ matrix.environment }}-status --force-new-deployment
-          aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE"
+          # aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE"
+          aws deploy create-deployment \
+            --application-name development-status \
+            --deployment-group-name development-status \
+            --deployment-config-name CodeDeployDefault.ECSAllAtOnce \
+            --revision "revisionType=S3,s3Location={bucket=development-status-deployments,key=_buildAssets/appspec.json,bundleType=JSON}"
