@@ -108,5 +108,5 @@ jobs:
           #   --service "$ECS_SERVICE" \
           #   --task-definition "$TASK_DEFINITION_ARN" \
           #   --force-new-deployment
-          aws ecs update-service --cluster ${{ matrix.environment }}-cluster --service ${{ matrix.environment }}-status  --task-definition ${{ matrix.environment }}-task --force-new-deployment
+          aws ecs update-service --cluster ${{ matrix.environment }}-cluster --service ${{ matrix.environment }}-status  --task-definition ${{ matrix.environment }}-status --force-new-deployment
           aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE"
