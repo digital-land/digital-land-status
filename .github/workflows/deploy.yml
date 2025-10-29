@@ -87,17 +87,15 @@ jobs:
         run: |
           set -euo pipefail
           aws ecs describe-task-definition --task-definition "$ECS_TASK_FAMILY" --include TAGS > taskdef-full.json
-          jq '.taskDefinition' taskdef-full.json > taskdef.json
-          jq '.tags // []' taskdef-full.json > taskdef-tags.json
+          jq --arg IMAGE "$IMAGE_URI" '
+            (.taskDefinition
+              | .containerDefinitions |= map(.image = $IMAGE)
+              | del(.revision, .taskDefinitionArn, .requiresAttributes, .compatibilities, .status, .registeredAt, .registeredBy)
+            ) as $def
+            | $def + (if (.tags // [] | length) > 0 then {tags: (.tags // [])} else {} end)
+          ' taskdef-full.json > register-input.json
 
-          jq --arg IMAGE "$IMAGE_URI" '.containerDefinitions |= map(.image = $IMAGE)
-            | del(.revision, .taskDefinitionArn, .requiresAttributes, .compatibilities, .status, .registeredAt, .registeredBy)' taskdef.json > new-taskdef.json
-
-          if [ "$(jq 'length' taskdef-tags.json)" -gt 0 ]; then
-            aws ecs register-task-definition --cli-input-json file://new-taskdef.json --tags file://taskdef-tags.json > register-result.json
-          else
-            aws ecs register-task-definition --cli-input-json file://new-taskdef.json > register-result.json
-          fi
+          aws ecs register-task-definition --cli-input-json file://register-input.json > register-result.json
 
           task_definition_arn=$(jq -r '.taskDefinition.taskDefinitionArn' register-result.json)
           echo "task_definition_arn=$task_definition_arn" >> "$GITHUB_OUTPUT"
