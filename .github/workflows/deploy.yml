@@ -103,9 +103,10 @@ jobs:
           TASK_DEFINITION_ARN: ${{ steps.register_task_definition.outputs.task_definition_arn }}
         run: |
           set -euo pipefail
-          aws ecs update-service \
-            --cluster "$ECS_CLUSTER" \
-            --service "$ECS_SERVICE" \
-            --task-definition "$TASK_DEFINITION_ARN" \
-            --force-new-deployment
+          # aws ecs update-service \
+          #   --cluster "$ECS_CLUSTER" \
+          #   --service "$ECS_SERVICE" \
+          #   --task-definition "$TASK_DEFINITION_ARN" \
+          #   --force-new-deployment
+          aws ecs update-service --cluster ${{ matrix.environment }}-cluster --service ${{ matrix.environment }}-status  --task-definition ${{ matrix.environment }}-task --force-new-deployment
           aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE"
