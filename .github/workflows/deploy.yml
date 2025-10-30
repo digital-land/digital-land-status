@@ -73,10 +73,12 @@ jobs:
       - run: |
           docker tag $DOCKER_REPO:${{ steps.vars.outputs.sha_short }} $DOCKER_REPO:${{ steps.vars.outputs.safe_ref }}
           docker tag $DOCKER_REPO:${{ steps.vars.outputs.sha_short }} $DOCKER_REPO:${{ steps.vars.outputs.release_tag }}
+          docker tag $DOCKER_REPO:${{ steps.vars.outputs.sha_short }} $DOCKER_REPO:latest
 
       - run: |
           docker push $DOCKER_REPO:${{ steps.vars.outputs.safe_ref }}
           docker push $DOCKER_REPO:${{ steps.vars.outputs.release_tag }}
+          docker push $DOCKER_REPO:latest
 
       - name: Register ECS task definition revision
         id: register_task_definition
