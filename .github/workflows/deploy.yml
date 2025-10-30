@@ -127,9 +127,8 @@ jobs:
           CODEDEPLOY_DEPLOYMENT_GROUP: development-status-deployment
         run: |
           set -euo pipefail
-          taskdef_content=$(jq -c . codedeploy/rendered/taskdef.json)
           appspec_content=$(jq -c . codedeploy/rendered/appspec.json)
           aws deploy create-deployment \
             --application-name "$CODEDEPLOY_APPLICATION" \
             --deployment-group-name "$CODEDEPLOY_DEPLOYMENT_GROUP" \
-            --revision "$(jq -n --arg td "$taskdef_content" --arg as "$appspec_content" '{revisionType:"AppSpecContent",appSpecContent:{content:$as},taskDefinition:{content:$td}}')"
+            --revision "$(jq -n --arg as "$appspec_content" '{revisionType:"AppSpecContent",appSpecContent:{content:$as}}')"
