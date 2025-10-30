@@ -100,9 +100,42 @@ jobs:
           task_definition_arn=$(jq -r '.taskDefinition.taskDefinitionArn' register-result.json)
           echo "task_definition_arn=$task_definition_arn" >> "$GITHUB_OUTPUT"
 
-      - name: Deploy ECS service
+      # - name: Deploy ECS service
+      #   env:
+      #     TASK_DEFINITION_ARN: ${{ steps.register_task_definition.outputs.task_definition_arn }}
+      #   run: |
+      #     set -euo pipefail
+      #     aws codepipeline start-pipeline-execution --name development-status-deployment
+
+      - name: Prepare AppSpec with new task definition
         env:
-          TASK_DEFINITION_ARN: ${{ steps.register_task_definition.outputs.task_definition_arn }}
+          TASK_DEF_ARN: ${{ steps.register_task_definition.outputs.task_definition_arn }}
         run: |
           set -euo pipefail
-          aws codepipeline start-pipeline-execution --name development-status-deployment
+          # Download the current template (matches Terraform’s pipeline assets)
+          aws s3 cp s3://development-status-deployments/_buildAssets/appspec.json appspec-template.json
+
+          # Replace the TASK_DEFINITION placeholder with the new ARN
+          jq --arg TASK_DEF "$TASK_DEF_ARN" '
+            .Resources |= map(
+              if .TargetService?.Properties?.TaskDefinition == "TASK_DEFINITION"
+              then .TargetService.Properties.TaskDefinition = $TASK_DEF | .
+              else .
+              end
+            )
+          ' appspec-template.json > appspec.json
+
+          aws s3 cp appspec.json \
+            s3://development-status-deployments/_buildAssets/appspec.json
+
+      - name: Create CodeDeploy deployment
+        run: |
+          set -euo pipefail
+          aws deploy create-deployment \
+            --application-name development-status \
+            --deployment-group-name development-status-deployment \
+            --revision revisionType=S3,s3Location={bucket=development-status-deployments,key=_buildAssets/appspec.json,bundleType=JSON}
+
+
+
+
