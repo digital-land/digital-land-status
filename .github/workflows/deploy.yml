@@ -103,14 +103,4 @@ jobs:
           TASK_DEFINITION_ARN: ${{ steps.register_task_definition.outputs.task_definition_arn }}
         run: |
           set -euo pipefail
-          # aws ecs update-service \
-          #   --cluster "$ECS_CLUSTER" \
-          #   --service "$ECS_SERVICE" \
-          #   --task-definition "$TASK_DEFINITION_ARN" \
-          #   --force-new-deployment
-          # aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE"
-          aws deploy create-deployment \
-            --application-name development-status \
-            --deployment-group-name development-status-deployment \
-            --deployment-config-name CodeDeployDefault.ECSAllAtOnce \
-            --revision "revisionType=S3,s3Location={bucket=development-status-deployments,key=_buildAssets/appspec.json,bundleType=JSON}"
+          aws codepipeline start-pipeline-execution --name development-status-deployment
