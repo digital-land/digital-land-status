@@ -118,13 +118,33 @@ jobs:
             codedeploy/appspec.json > codedeploy/rendered/appspec.json
 
       - name: Trigger CodeDeploy deployment
+        id: trigger_codedeploy
         env:
           CODEDEPLOY_APPLICATION: ${{ matrix.environment }}-status
           CODEDEPLOY_DEPLOYMENT_GROUP: ${{ matrix.environment }}-status-deployment
         run: |
           set -euo pipefail
           appspec_content=$(jq -c . codedeploy/rendered/appspec.json)
-          aws deploy create-deployment \
+          deployment_json=$(aws deploy create-deployment \
             --application-name "$CODEDEPLOY_APPLICATION" \
             --deployment-group-name "$CODEDEPLOY_DEPLOYMENT_GROUP" \
-            --revision "$(jq -n --arg as "$appspec_content" '{revisionType:"AppSpecContent",appSpecContent:{content:$as}}')"
+            --revision "$(jq -n --arg as "$appspec_content" '{revisionType:"AppSpecContent",appSpecContent:{content:$as}}')" \
+            --output json)
+
+          echo "$deployment_json" > codedeploy/deployment.json
+          deployment_id=$(jq -r '.deploymentId' codedeploy/deployment.json)
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+
+          echo "::notice::Triggered CodeDeploy deployment $deployment_id"
+
+          if aws deploy wait deployment-successful --deployment-id "$deployment_id"; then
+            echo "::notice::Deployment $deployment_id completed successfully"
+          else
+            deployment_info=$(aws deploy get-deployment \
+              --deployment-id "$deployment_id" \
+              --output json)
+            deployment_status=$(echo "$deployment_info" | jq -r '.deploymentInfo.status')
+            failure_details=$(echo "$deployment_info" | jq -c '.deploymentInfo.errorInformation // {}')
+            echo "::error::Deployment $deployment_id ended with status $deployment_status: $failure_details"
+            exit 1
+          fi
