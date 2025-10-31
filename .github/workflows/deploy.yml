@@ -35,9 +35,7 @@ jobs:
     environment: ${{ matrix.environment }}
     env:
       DOCKER_REPO: ${{ secrets.DEPLOY_DOCKER_REPOSITORY }}
-      ECS_TASK_FAMILY: development-status
-      ECS_CLUSTER: ${{ matrix.environment }}-cluster
-      ECS_SERVICE: development-status
+      ECS_TASK_FAMILY: ${{ matrix.environment }}-status
     steps:
       - uses: actions/checkout@v4
 
@@ -73,14 +71,12 @@ jobs:
       - run: |
           docker tag $DOCKER_REPO:${{ steps.vars.outputs.sha_short }} $DOCKER_REPO:${{ steps.vars.outputs.safe_ref }}
           docker tag $DOCKER_REPO:${{ steps.vars.outputs.sha_short }} $DOCKER_REPO:${{ steps.vars.outputs.release_tag }}
-          # docker tag $DOCKER_REPO:${{ steps.vars.outputs.sha_short }} $DOCKER_REPO:latest
-
+          
       - run: |
           docker push $DOCKER_REPO:${{ steps.vars.outputs.safe_ref }}
           docker push $DOCKER_REPO:${{ steps.vars.outputs.release_tag }}
-          # docker push $DOCKER_REPO:latest
 
-      - name: Register ECS task definition revision
+      - name: register ecs task definition revision
         id: register_task_definition
         env:
           IMAGE_URI: ${{ env.DOCKER_REPO }}:${{ steps.vars.outputs.release_tag }}
@@ -100,14 +96,14 @@ jobs:
           task_definition_arn=$(jq -r '.taskDefinition.taskDefinitionArn' register-result.json)
           echo "task_definition_arn=$task_definition_arn" >> "$GITHUB_OUTPUT"
 
-      - name: Fetch deployment templates from S3
+      - name: fetch deployment templates from S3
         run: |
           set -euo pipefail
           mkdir -p codedeploy
-          aws s3 cp "s3://development-status-deployments/_buildAssets/taskdef.json" codedeploy/taskdef.json
-          aws s3 cp "s3://development-status-deployments/_buildAssets/appspec.json" codedeploy/appspec.json
+          aws s3 cp "s3://${{ matrix.environment }}-status-deployments/_buildAssets/taskdef.json" codedeploy/taskdef.json
+          aws s3 cp "s3://${{ matrix.environment }}-status-deployments/_buildAssets/appspec.json" codedeploy/appspec.json
 
-      - name: Render CodeDeploy bundle
+      - name: render codedeploy template
         env:
           IMAGE_URI: ${{ env.DOCKER_REPO }}:${{ steps.vars.outputs.release_tag }}
           TASK_DEF_ARN: ${{ steps.register_task_definition.outputs.task_definition_arn }}
@@ -123,8 +119,8 @@ jobs:
 
       - name: Trigger CodeDeploy deployment
         env:
-          CODEDEPLOY_APPLICATION: development-status
-          CODEDEPLOY_DEPLOYMENT_GROUP: development-status-deployment
+          CODEDEPLOY_APPLICATION: ${{ matrix.environment }}-status
+          CODEDEPLOY_DEPLOYMENT_GROUP: ${{ matrix.environment }}-status-deployment
         run: |
           set -euo pipefail
           appspec_content=$(jq -c . codedeploy/rendered/appspec.json)
