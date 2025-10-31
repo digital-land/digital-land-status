@@ -135,16 +135,31 @@ jobs:
           deployment_id=$(jq -r '.deploymentId' codedeploy/deployment.json)
           echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
 
-          echo "::notice::Triggered CodeDeploy deployment $deployment_id"
+          echo "::notice::triggered codedeploy deployment $deployment_id"
+          
+          set +e
+          aws deploy wait deployment-successful --deployment-id "$deployment_id" &
+          waiter_pid=$!
 
-          if aws deploy wait deployment-successful --deployment-id "$deployment_id"; then
-            echo "::notice::Deployment $deployment_id completed successfully"
+          while kill -0 "$waiter_pid" 2>/dev/null; do
+            echo "::notice::deployment $deployment_id still in progress..."
+            sleep 30
+          done
+
+          wait "$waiter_pid"
+          wait_status=$?
+          set -euo pipefail
+
+          deployment_info=$(aws deploy get-deployment \
+            --deployment-id "$deployment_id" \
+            --output json)
+          deployment_status=$(echo "$deployment_info" | jq -r '.deploymentInfo.status')
+          echo "deployment_status=$deployment_status" >> "$GITHUB_OUTPUT"
+
+          if [ "$wait_status" -eq 0 ]; then
+            echo "::notice::Deployment $deployment_id status: $deployment_status"
           else
-            deployment_info=$(aws deploy get-deployment \
-              --deployment-id "$deployment_id" \
-              --output json)
-            deployment_status=$(echo "$deployment_info" | jq -r '.deploymentInfo.status')
             failure_details=$(echo "$deployment_info" | jq -c '.deploymentInfo.errorInformation // {}')
-            echo "::error::Deployment $deployment_id ended with status $deployment_status: $failure_details"
+            echo "::error::deployment $deployment_id ended with status $deployment_status: $failure_details"
             exit 1
           fi
