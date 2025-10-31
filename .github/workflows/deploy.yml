@@ -135,7 +135,7 @@ jobs:
           deployment_id=$(jq -r '.deploymentId' codedeploy/deployment.json)
           echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
 
-          echo "::note::triggered codedeploy deployment $deployment_id"
+          echo "triggered codedeploy deployment $deployment_id"
           
           set +e
           aws deploy wait deployment-successful --deployment-id "$deployment_id" &
