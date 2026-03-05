@@ -136,7 +136,7 @@ jobs:
           deployment_json=$(aws deploy create-deployment \
             --application-name "$CODEDEPLOY_APPLICATION" \
             --deployment-group-name "$CODEDEPLOY_DEPLOYMENT_GROUP" \
-            --description "sha=${{ steps.vars.outputs.sha_full }}"
+            --description "sha=${{ steps.vars.outputs.sha_full }}" \
             --revision "$(jq -n --arg as "$appspec_content" '{revisionType:"AppSpecContent",appSpecContent:{content:$as}}')" \
             --output json)
 
