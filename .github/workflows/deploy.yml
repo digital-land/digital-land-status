@@ -42,15 +42,10 @@ jobs:
       - id: vars
         run: |
           sha_full=${GITHUB_SHA}
-          sha_short=$(git rev-parse --short HEAD)
-          timestamp=$(date -u +%Y%m%dT%H%M%SZ)
           safe_ref=$(echo "${GITHUB_REF_NAME}" \
             | tr '[:upper:]' '[:lower:]' \
             | sed -E 's#[^a-z0-9_.-]+#-#g; s/^-+//; s/-+$//')
           echo "sha_full=${sha_full}" >> "$GITHUB_OUTPUT"
-          echo "sha_short=${sha_short}" >> "$GITHUB_OUTPUT"
-          echo "timestamp=${timestamp}" >> "$GITHUB_OUTPUT"
-          echo "release_tag=${timestamp}-${sha_short}" >> "$GITHUB_OUTPUT"
           echo "safe_ref=${safe_ref}" >> "$GITHUB_OUTPUT"
 
 
@@ -72,15 +67,11 @@ jobs:
       - run: docker build --build-arg DEPLOY_TIME="$(date +%Y-%m-%dT%H:%M:%S)" -t $DOCKER_REPO:${{ steps.vars.outputs.sha_full }} .
 
       - run: |
-          docker tag $DOCKER_REPO:${{ steps.vars.outputs.sha_full }} $DOCKER_REPO:${{ steps.vars.outputs.sha_short }}
           docker tag $DOCKER_REPO:${{ steps.vars.outputs.sha_full }} $DOCKER_REPO:${{ steps.vars.outputs.safe_ref }}
-          docker tag $DOCKER_REPO:${{ steps.vars.outputs.sha_full }} $DOCKER_REPO:${{ steps.vars.outputs.release_tag }}
 
       - run: |
           docker push $DOCKER_REPO:${{ steps.vars.outputs.sha_full }}
-          docker push $DOCKER_REPO:${{ steps.vars.outputs.sha_short }}
           docker push $DOCKER_REPO:${{ steps.vars.outputs.safe_ref }}
-          docker push $DOCKER_REPO:${{ steps.vars.outputs.release_tag }}
 
 
       - name: register ecs task definition revision
