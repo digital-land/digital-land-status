@@ -35,18 +35,31 @@ jobs:
     environment: ${{ matrix.environment }}
     env:
       DOCKER_REPO: ${{ secrets.DEPLOY_DOCKER_REPOSITORY }}
+      ECS_TASK_FAMILY: ${{ matrix.environment }}-status
     steps:
       - uses: actions/checkout@v6
 
       - id: vars
-        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+        run: |
+          sha_full=${GITHUB_SHA}
+          sha_short=$(git rev-parse --short HEAD)
+          timestamp=$(date -u +%Y%m%dT%H%M%SZ)
+          safe_ref=$(echo "${GITHUB_REF_NAME}" \
+            | tr '[:upper:]' '[:lower:]' \
+            | sed -E 's#[^a-z0-9_.-]+#-#g; s/^-+//; s/-+$//')
+          echo "sha_full=${sha_full}" >> "$GITHUB_OUTPUT"
+          echo "sha_short=${sha_short}" >> "$GITHUB_OUTPUT"
+          echo "timestamp=${timestamp}" >> "$GITHUB_OUTPUT"
+          echo "release_tag=${timestamp}-${sha_short}" >> "$GITHUB_OUTPUT"
+          echo "safe_ref=${safe_ref}" >> "$GITHUB_OUTPUT"
+
 
       - run: |
           curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
           unzip -q awscliv2.zip
           sudo ./aws/install --update
           sudo apt-get update
-          sudo apt-get install -y rsync
+          sudo apt-get install -y rsync jq
 
       - uses: aws-actions/configure-aws-credentials@v6
         with:
@@ -56,12 +69,106 @@ jobs:
 
       - uses: aws-actions/amazon-ecr-login@v2
 
-      - run: docker pull $DOCKER_REPO:latest || echo "no current latest image"
-      
-      - run: docker build --build-arg DEPLOY_TIME="$(date +%Y-%m-%dT%H:%M:%S)" -t $DOCKER_REPO:${{ steps.vars.outputs.sha_short }} .
+      - run: docker build --build-arg DEPLOY_TIME="$(date +%Y-%m-%dT%H:%M:%S)" -t $DOCKER_REPO:${{ steps.vars.outputs.sha_full }} .
 
-      - run: docker tag $DOCKER_REPO:${{ steps.vars.outputs.sha_short }} $DOCKER_REPO:latest
+      - run: |
+          docker tag $DOCKER_REPO:${{ steps.vars.outputs.sha_full }} $DOCKER_REPO:${{ steps.vars.outputs.sha_short }}
+          docker tag $DOCKER_REPO:${{ steps.vars.outputs.sha_full }} $DOCKER_REPO:${{ steps.vars.outputs.safe_ref }}
+          docker tag $DOCKER_REPO:${{ steps.vars.outputs.sha_full }} $DOCKER_REPO:${{ steps.vars.outputs.release_tag }}
 
-      - run: docker push $DOCKER_REPO:${{ steps.vars.outputs.sha_short }}
+      - run: |
+          docker push $DOCKER_REPO:${{ steps.vars.outputs.sha_full }}
+          docker push $DOCKER_REPO:${{ steps.vars.outputs.sha_short }}
+          docker push $DOCKER_REPO:${{ steps.vars.outputs.safe_ref }}
+          docker push $DOCKER_REPO:${{ steps.vars.outputs.release_tag }}
 
-      - run: docker push $DOCKER_REPO:latest
+
+      - name: register ecs task definition revision
+        id: register_task_definition
+        env:
+          IMAGE_URI: ${{ env.DOCKER_REPO }}:${{ steps.vars.outputs.sha_full }}
+
+        run: |
+          set -euo pipefail
+          aws ecs describe-task-definition --task-definition "$ECS_TASK_FAMILY" --include TAGS > taskdef-full.json
+          jq --arg IMAGE "$IMAGE_URI" '
+            (.taskDefinition
+              | .containerDefinitions |= map(.image = $IMAGE)
+              | del(.revision, .taskDefinitionArn, .requiresAttributes, .compatibilities, .status, .registeredAt, .registeredBy)
+            ) as $def
+            | $def + (if (.tags // [] | length) > 0 then {tags: (.tags // [])} else {} end)
+          ' taskdef-full.json > register-input.json
+
+          aws ecs register-task-definition --cli-input-json file://register-input.json > register-result.json
+
+          task_definition_arn=$(jq -r '.taskDefinition.taskDefinitionArn' register-result.json)
+          echo "task_definition_arn=$task_definition_arn" >> "$GITHUB_OUTPUT"
+
+      - name: fetch deployment templates from S3
+        run: |
+          set -euo pipefail
+          mkdir -p codedeploy
+          aws s3 cp "s3://${{ matrix.environment }}-status-deployments/_buildAssets/taskdef.json" codedeploy/taskdef.json
+          aws s3 cp "s3://${{ matrix.environment }}-status-deployments/_buildAssets/appspec.json" codedeploy/appspec.json
+
+      - name: render codedeploy template
+        env:
+          IMAGE_URI: ${{ env.DOCKER_REPO }}:${{ steps.vars.outputs.sha_full }}
+          TASK_DEF_ARN: ${{ steps.register_task_definition.outputs.task_definition_arn }}
+        run: |
+          set -euo pipefail
+          mkdir -p codedeploy/rendered
+          jq --arg IMAGE "$IMAGE_URI" \
+            '.containerDefinitions |= map(.image = $IMAGE)' \
+            codedeploy/taskdef.json > codedeploy/rendered/taskdef.json
+          jq --arg TASK_DEF "$TASK_DEF_ARN" \
+            '.Resources[0].TargetService.Properties.TaskDefinition = $TASK_DEF' \
+            codedeploy/appspec.json > codedeploy/rendered/appspec.json
+
+      - name: Trigger CodeDeploy deployment
+        id: trigger_codedeploy
+        env:
+          CODEDEPLOY_APPLICATION: ${{ matrix.environment }}-status
+          CODEDEPLOY_DEPLOYMENT_GROUP: ${{ matrix.environment }}-status-deployment
+        run: |
+          set -euo pipefail
+          appspec_content=$(jq -c . codedeploy/rendered/appspec.json)
+          deployment_json=$(aws deploy create-deployment \
+            --application-name "$CODEDEPLOY_APPLICATION" \
+            --deployment-group-name "$CODEDEPLOY_DEPLOYMENT_GROUP" \
+            --description "sha=${{ steps.vars.outputs.sha_full }}" \
+            --revision "$(jq -n --arg as "$appspec_content" '{revisionType:"AppSpecContent",appSpecContent:{content:$as}}')" \
+            --output json)
+
+          echo "$deployment_json" > codedeploy/deployment.json
+          deployment_id=$(jq -r '.deploymentId' codedeploy/deployment.json)
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+
+          echo "triggered codedeploy deployment $deployment_id"
+          
+          set +e
+          aws deploy wait deployment-successful --deployment-id "$deployment_id" &
+          waiter_pid=$!
+
+          while kill -0 "$waiter_pid" 2>/dev/null; do
+            echo "still in progress..."
+            sleep 30
+          done
+
+          wait "$waiter_pid"
+          wait_status=$?
+          set -euo pipefail
+
+          deployment_info=$(aws deploy get-deployment \
+            --deployment-id "$deployment_id" \
+            --output json)
+          deployment_status=$(echo "$deployment_info" | jq -r '.deploymentInfo.status')
+          echo "deployment_status=$deployment_status" >> "$GITHUB_OUTPUT"
+
+          if [ "$wait_status" -eq 0 ]; then
+            echo "Deployment $deployment_id status: $deployment_status"
+          else
+            failure_details=$(echo "$deployment_info" | jq -c '.deploymentInfo.errorInformation // {}')
+            echo "::error::deployment $deployment_id ended with status $deployment_status: $failure_details"
+            exit 1
+          fi
