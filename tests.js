@@ -4,7 +4,7 @@ const {Client} = require("pg");
 const {S3, STS} = require("aws-sdk");
 
 module.exports = [{
-    print: "DEPLOYMENT:TIME",
+    print: "DEPLOYMENT:TIME8",
     check: async () => readFileSync(join(process.cwd(), 'DEPLOY_TIME'), 'utf-8').replace('\n', ''),
 }, {
     print: "DB:READ",
