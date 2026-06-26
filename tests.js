@@ -1,11 +1,44 @@
-const {readFileSync} = require("fs");
+const {readFileSync, readdirSync, statSync} = require("fs");
 const {join} = require("path");
 const {Client} = require("pg");
 const {S3, STS} = require("aws-sdk");
 
+const datasetsDirectory = "/mnt/datasets";
+
 module.exports = [{
     print: "DEPLOYMENT:TIME",
     check: async () => readFileSync(join(process.cwd(), 'DEPLOY_TIME'), 'utf-8').replace('\n', ''),
+}, {
+    print: "DATASETS:DIRECTORY",
+    check: async () => {
+        let stats;
+
+        try {
+            stats = statSync(datasetsDirectory);
+        } catch (error) {
+            if (error.code === "ENOENT") {
+                throw new Error(`${datasetsDirectory} does not exist`);
+            }
+
+            throw error;
+        }
+
+        if (!stats.isDirectory()) {
+            throw new Error(`${datasetsDirectory} is not a directory`);
+        }
+
+        const entries = readdirSync(datasetsDirectory, {withFileTypes: true});
+
+        if (entries.length === 0) {
+            throw new Error(`${datasetsDirectory} does not contain any files`);
+        }
+
+        return {
+            entries: entries.length,
+            files: entries.filter(entry => entry.isFile()).length,
+            directories: entries.filter(entry => entry.isDirectory()).length,
+        };
+    },
 }, {
     print: "DB:READ",
     check: async () => {
