@@ -3,13 +3,13 @@ const {join} = require("path");
 const {Client} = require("pg");
 const {S3, STS} = require("aws-sdk");
 
-const datasetsDirectory = "/mnt/datasets";
+const datasetsDirectory = "/mnt/datasets1";
 
 module.exports = [{
     print: "DEPLOYMENT:TIME",
     check: async () => readFileSync(join(process.cwd(), 'DEPLOY_TIME'), 'utf-8').replace('\n', ''),
 }, {
-    print: "DATASETS:DIRECTORY",
+    print: "S3:FILE:MOUNT:/mnt/datasets",
     check: async () => {
         let stats;
 
