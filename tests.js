@@ -3,7 +3,7 @@ const {join} = require("path");
 const {Client} = require("pg");
 const {S3, STS} = require("aws-sdk");
 
-const datasetsDirectory = "/mnt/datasets1";
+const datasetsDirectory = "/mnt/datasets";
 
 module.exports = [{
     print: "DEPLOYMENT:TIME",
