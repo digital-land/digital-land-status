@@ -6,7 +6,7 @@ const {S3, STS} = require("aws-sdk");
 const datasetsDirectory = "/mnt/datasets";
 
 module.exports = [{
-    print: "DEPLOYMENT:TIME",
+    print: "DEPLOYMENT:TIME8",
     check: async () => readFileSync(join(process.cwd(), 'DEPLOY_TIME'), 'utf-8').replace('\n', ''),
 }, {
     print: "S3:FILE:MOUNT:/mnt/datasets",
